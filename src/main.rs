@@ -54,16 +54,18 @@ fn main() {
                                     *control_flow = ControlFlow::Exit
                                 }
                                 (VirtualKeyCode::Up, ElementState::Pressed) => {
-                                    state.pressure_multiplier += 1.0;
+                                    state.speed_scale += 0.1;
                                 }
                                 (VirtualKeyCode::Down, ElementState::Pressed) => {
-                                    state.pressure_multiplier -= 1.0;
+                                    state.speed_scale -= 0.1;
+                                    state.speed_scale = state.speed_scale.max(0.1);
                                 }
                                 (VirtualKeyCode::Left, ElementState::Pressed) => {
-                                    state.target_density -= 10.0;
+                                    state.force_scale -= 0.1;
+                                    state.force_scale = state.force_scale.max(0.1);
                                 }
                                 (VirtualKeyCode::Right, ElementState::Pressed) => {
-                                    state.target_density += 10.0;
+                                    state.force_scale += 0.1;
                                 }
                                 _ => {}
                             }

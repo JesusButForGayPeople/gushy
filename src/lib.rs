@@ -65,6 +65,8 @@ pub struct State {
     pub mouse_info: MouseInfo,
     pub target_density: f32,
     pub pressure_multiplier: f32,
+    pub speed_scale: f32,
+    pub force_scale: f32,
 }
 
 impl State {
@@ -89,6 +91,8 @@ impl State {
             window_size: WindowSize::new(window_width, window_height),
             target_density: 0.5,
             pressure_multiplier: 10.0,
+            speed_scale: 1.0,
+            force_scale: 1.0,
         }
     }
 }
@@ -96,7 +100,7 @@ impl State {
 pub fn generate_dots(width: f32, height: f32) -> Vec<Dot> {
     let mut rng = rand::thread_rng();
 
-    (0..50)
+    (0..500)
         .map(|_| {
             Dot::new(
                 Pair::new(
@@ -194,8 +198,8 @@ pub fn update_dots(state: &mut State) {
             state.target_density,
             state.pressure_multiplier,
         );
-        dot.velocity += pressure_force + gravity;
-        dot.position += dot.velocity;
+        dot.velocity += (pressure_force + gravity) * state.force_scale;
+        dot.position += dot.velocity * state.speed_scale;
 
         // Boundary conditions
         let dampening_factor = 0.9;

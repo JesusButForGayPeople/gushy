@@ -8,13 +8,15 @@ pub fn print_debug(state: &mut State) {
     print!("\r");
 
     let text = format!(
-        "FPS: {:.2}\nUp Time: {:.2} sec\nWindow Size: [width: {:?}, height: {:?}] \nTarget Density: {:.2}\nPressure Scale: {:.2}\nMouse Position: ({:?},{:?})",
+        "FPS: {:.2}\nUp Time: {:.2} sec\nWindow Size: [width: {:?}, height: {:?}] \nTarget Density: {:.2}\nPressure Multiplier: {:.2}\nSpeed Scale: {:.2}\nForce Scale: {:.2}\nMouse Position: ({:?},{:?})",
         fps,
         elapsed,
         state.window_size.width,
         state.window_size.height,
         state.target_density,
         state.pressure_multiplier,
+        state.speed_scale,
+        state.force_scale,
         state.mouse_info.scaled_mouse_position.x,
         state.mouse_info.scaled_mouse_position.y,
     );
@@ -24,7 +26,7 @@ pub fn print_debug(state: &mut State) {
         println!("{}", text);
     } else {
         // Move cursor up to overwrite previous text
-        print!("\x1B[{}A", 6); // Move cursor up
+        print!("\x1B[{}A", 8); // Move cursor up
         for line in text.lines() {
             print!("\x1B[K{}\r\n", line); // Clear line then print new value
         }
