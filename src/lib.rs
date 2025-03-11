@@ -100,14 +100,14 @@ impl State {
 pub fn generate_dots(width: f32, height: f32) -> Vec<Dot> {
     let mut rng = rand::thread_rng();
 
-    (0..500)
+    (0..1000)
         .map(|_| {
             Dot::new(
                 Pair::new(
                     rng.gen_range((-width / 2.0) + 60.0..(width / 2.0) - 60.0),
                     rng.gen_range((-height / 2.0) + 60.0..(height / 2.0) - 60.0),
                 ),
-                Pair::new(rng.gen_range(-10.0..10.0), rng.gen_range(-10.0..10.0)),
+                Pair::new(0.0, 0.0),
                 0.0,
             )
         })
@@ -131,7 +131,7 @@ pub fn derivative_smoothing_kernel(radius: f32, distance: f32) -> f32 {
 }
 
 pub fn compute_densities(dots: &[Dot], radius: f32) -> Vec<f32> {
-    let mass = 1.0;
+    let mass = 1.0 / 100.0;
     dots.iter()
         .map(|dot_i| {
             dots.iter()
@@ -151,14 +151,14 @@ pub fn calculate_pressure(
     target_density: f32,
     pressure_multiplier: f32,
 ) -> Pair {
-    let mass = 1.0;
+    let mass = 1.0 / 100.0;
     let mut total_pressure_force = Pair::new(0.0, 0.0);
 
     for particle in dots.iter() {
-        let distance = (particle.position - center).magnitude();
-        if distance <= radius && distance > 0.0 {
-            let direction = -(particle.position - center) / distance;
-            let slope = derivative_smoothing_kernel(radius, distance);
+        let distance = (particle.position - center).magnitude().abs();
+        if distance <= radius {
+            let direction = -(particle.position - center) / distance.max(0.0001);
+            let slope = derivative_smoothing_kernel(radius, distance.max(0.0001));
             let density = particle.density;
 
             if density != 0.0 {
@@ -178,9 +178,8 @@ pub fn calculate_pressure(
 }
 
 pub fn update_dots(state: &mut State) {
-    let gravity = Pair::new(0.0, 0.00);
+    let gravity = Pair::new(0.0, 0.02);
     let dots_copy = state.dots.clone(); // Avoid borrowing conflicts
-
     // Compute densities first
     let densities: Vec<f32> = compute_densities(&dots_copy, 10.0);
 
