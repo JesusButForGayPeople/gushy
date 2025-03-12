@@ -35,7 +35,7 @@ fn main() {
             Pixels::new(window_size.width, window_size.height, surface_texture).unwrap();
 
         // Create the animation state
-        let mut state = State::new(window_size.width, window_size.height);
+        let mut state = State::new(30, window_size.width, window_size.height);
 
         let mut background_cache = Pixmap::new(window_size.width, window_size.height)
             .expect("Failed to create background cache");
@@ -76,7 +76,7 @@ fn main() {
                         ..
                     } => {
                         let zoom_factor = 1.0 + (y * 0.05);
-                        state.zoom = (state.zoom * zoom_factor).clamp(0.1, 50.0);
+                        state.zoom = (state.zoom * zoom_factor).clamp(0.1, 100.0);
                     }
                     WindowEvent::MouseWheel { .. } => {} // Handle other MouseScrollDelta variants
                     WindowEvent::MouseInput {
@@ -91,8 +91,34 @@ fn main() {
                                         state.mouse_info.mouse_down = true;
                                         state.mouse_info.mouse_position_last = None;
                                     }
+
+                                    if let Some(min_dot) = state
+                                        .dots
+                                        .iter_mut()
+                                        .filter(|dot| dot.distance_to_cursor < 30.0)
+                                        .min_by(|a, b| {
+                                            a.distance_to_cursor
+                                                .partial_cmp(&b.distance_to_cursor)
+                                                .unwrap()
+                                        })
+                                    {
+                                        state.focus_color = Some(min_dot.color);
+                                        min_dot.is_selected = true;
+                                    }
                                 }
-                                ElementState::Released => state.mouse_info.mouse_down = false,
+                                ElementState::Released => {
+                                    state.mouse_info.mouse_down = false;
+                                    state
+                                        .dots
+                                        .iter_mut()
+                                        .map(|dot| {
+                                            dot.is_selected = false;
+                                            if dot.velocity().abs().magnitude() > 100.0 {
+                                                dot.velocity = Pair::new(0.0, 0.0);
+                                            }
+                                        })
+                                        .collect()
+                                }
                             }
                         }
                     }
@@ -108,10 +134,24 @@ fn main() {
 
                         state.mouse_info.scaled_mouse_position = Pair::new(adjusted_x, adjusted_y);
 
+                        state.dots.iter_mut().for_each(|dot| {
+                            dot.distance_to_cursor = state
+                                .mouse_info
+                                .scaled_mouse_position
+                                .distance(dot.position() + Pair::new((400) as f32, (300) as f32));
+                            if dot.is_selected {
+                                dot.position = state.mouse_info.scaled_mouse_position
+                                    - Pair::new((400) as f32, (300) as f32);
+                            }
+                        });
+
                         if state.mouse_info.mouse_down {
                             if let Some(last_position) = &state.mouse_info.mouse_position_last {
                                 let delta = state.mouse_info.mouse_position - *last_position;
-                                state.mouse_info.mouse_delta = delta;
+                                let adj_x = delta.x * (800.0 / (state.window_size.width as f32));
+                                let adj_y = delta.y * (600.0 / (state.window_size.height as f32));
+
+                                state.mouse_info.mouse_delta = Pair::new(adj_x, adj_y);
                             }
                             state.mouse_info.mouse_position_last =
                                 Some(state.mouse_info.mouse_position);

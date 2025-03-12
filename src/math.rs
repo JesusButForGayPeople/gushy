@@ -11,6 +11,13 @@ impl Pair {
         Pair { x, y }
     }
 
+    pub fn abs(&self) -> Pair {
+        Pair {
+            x: self.x.abs(),
+            y: self.y.abs(),
+        }
+    }
+
     pub fn normalize_or_zero(self) -> Self {
         let length = (self.x * self.x + self.y * self.y).sqrt();
         if length > 0.0 {
@@ -146,5 +153,11 @@ impl DivAssign<f32> for Pair {
     fn div_assign(&mut self, scalar: f32) {
         self.x /= scalar;
         self.y /= scalar;
+    }
+}
+
+impl PartialOrd for Pair {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.magnitude().partial_cmp(&other.magnitude())
     }
 }

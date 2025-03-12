@@ -1,5 +1,6 @@
 use rand::Rng;
 use std::time::Instant;
+use tiny_skia::Color;
 
 pub mod debug;
 pub mod math;
@@ -39,14 +40,20 @@ pub struct Dot {
     pub position: Pair,
     pub velocity: Pair,
     pub density: f32,
+    pub color: Color,
+    pub distance_to_cursor: f32,
+    pub is_selected: bool,
 }
 
 impl Dot {
-    pub fn new(position: Pair, velocity: Pair, density: f32) -> Self {
+    pub fn new(position: Pair, velocity: Pair, density: f32, color: Color) -> Self {
         Self {
             position,
             velocity,
             density,
+            color,
+            distance_to_cursor: 0.0,
+            is_selected: false,
         }
     }
     pub fn position(&self) -> Pair {
@@ -67,14 +74,15 @@ pub struct State {
     pub pressure_multiplier: f32,
     pub speed_scale: f32,
     pub force_scale: f32,
+    pub focus_color: Option<Color>,
 }
 
 impl State {
-    pub fn new(window_width: u32, window_height: u32) -> State {
-        let dots = generate_dots(window_width as f32, window_height as f32);
+    pub fn new(ndots: usize, window_width: u32, window_height: u32) -> State {
+        let dots = generate_dots(ndots, window_width as f32, window_height as f32, 150.0);
         State {
             dots,
-            zoom: 20.0,
+            zoom: 40.0,
             mouse_info: MouseInfo {
                 mouse_down: false,
                 mouse_position: Pair::new(0.0, 0.0),
@@ -89,27 +97,32 @@ impl State {
                 delta_time: 0.0,
             },
             window_size: WindowSize::new(window_width, window_height),
-            target_density: 0.5,
+            target_density: 0.05,
             pressure_multiplier: 10.0,
-            speed_scale: 1.0,
-            force_scale: 1.0,
+            speed_scale: 1.0 / ndots as f32,
+            force_scale: 1.0 / ndots as f32,
+            focus_color: None,
         }
     }
 }
 
-pub fn generate_dots(width: f32, height: f32) -> Vec<Dot> {
+pub fn generate_dots(ndots: usize, width: f32, height: f32, orbit_radius: f32) -> Vec<Dot> {
     let mut rng = rand::thread_rng();
+    let center = Pair::new(0.0, 0.0);
+    let speed = (orbit_radius / (ndots as f32 * 10.0)).sqrt() * 0.1; // Adjust the speed for stable orbit
 
-    (0..1000)
+    (0..ndots)
         .map(|_| {
-            Dot::new(
-                Pair::new(
-                    rng.gen_range((-width / 2.0) + 60.0..(width / 2.0) - 60.0),
-                    rng.gen_range((-height / 2.0) + 60.0..(height / 2.0) - 60.0),
-                ),
-                Pair::new(0.0, 0.0),
-                0.0,
-            )
+            let angle = rng.gen_range(1.0..3.0 * std::f32::consts::PI);
+            let position = Pair::new(
+                center.x + orbit_radius * angle.cos(),
+                center.y + orbit_radius * angle.sin(),
+            );
+            let r: u8 = (207 + rng.gen_range(-30..30)) as u8;
+            let g: u8 = (31 + rng.gen_range(-30..30)) as u8;
+            let b: u8 = (72 + rng.gen_range(-30..30)) as u8;
+            let velocity = Pair::new(-speed / 2.0 * angle.sin(), speed / 2.5 * angle.cos());
+            Dot::new(position, velocity, 0.0, Color::from_rgba8(r, g, b, 255))
         })
         .collect()
 }
@@ -131,7 +144,7 @@ pub fn derivative_smoothing_kernel(radius: f32, distance: f32) -> f32 {
 }
 
 pub fn compute_densities(dots: &[Dot], radius: f32) -> Vec<f32> {
-    let mass = 1.0 / 100.0;
+    let mass = 1.0 / 2000.0;
     dots.iter()
         .map(|dot_i| {
             dots.iter()
@@ -151,7 +164,7 @@ pub fn calculate_pressure(
     target_density: f32,
     pressure_multiplier: f32,
 ) -> Pair {
-    let mass = 1.0 / 100.0;
+    let mass = 1.0 / 2000.0;
     let mut total_pressure_force = Pair::new(0.0, 0.0);
 
     for particle in dots.iter() {
@@ -177,8 +190,11 @@ pub fn calculate_pressure(
     total_pressure_force
 }
 
+pub const CENTER_REPULSIVE_RADIUS: f32 = 200.0; //
+pub const PARTICLE_REPULSIVE_RADIUS: f32 = 150.0; //
+
 pub fn update_dots(state: &mut State) {
-    let gravity = Pair::new(0.0, 0.02);
+    let gravity = Pair::new(0.0, 0.00);
     let dots_copy = state.dots.clone(); // Avoid borrowing conflicts
     // Compute densities first
     let densities: Vec<f32> = compute_densities(&dots_copy, 10.0);
@@ -187,6 +203,11 @@ pub fn update_dots(state: &mut State) {
     for (dot, new_density) in state.dots.iter_mut().zip(densities) {
         dot.density = new_density;
     }
+
+    // Define the center of the screen
+    let center = Pair::new(0.0, 0.0);
+    let circular_force_strength = 0.75; // Adjust the strength of the circular force
+    let repulsive_force_strength = 0.75; // Adjust the strength of the repulsive force
 
     // Compute pressure forces and update positions
     for dot in state.dots.iter_mut() {
@@ -197,28 +218,66 @@ pub fn update_dots(state: &mut State) {
             state.target_density,
             state.pressure_multiplier,
         );
-        dot.velocity += (pressure_force + gravity) * state.force_scale;
+
+        // Calculate the direction to the center
+        let to_center = center - dot.position;
+        let distance_to_center = to_center.magnitude().abs();
+        let direction_to_center = to_center / distance_to_center.max(0.0001);
+
+        // Calculate the required centripetal force for circular motion
+        let centripetal_force_magnitude = dot.velocity.magnitude().powi(2) / distance_to_center;
+        let centripetal_force =
+            direction_to_center * centripetal_force_magnitude * circular_force_strength;
+
+        // Apply the centripetal force
+        dot.velocity +=
+            (pressure_force + gravity + ((45.0 / dots_copy.len() as f32) * centripetal_force))
+                * state.force_scale;
+
+        // Apply a repulsive force near the center to prevent dots from getting stuck
+        if distance_to_center < CENTER_REPULSIVE_RADIUS {
+            let repulsive_force = -direction_to_center * repulsive_force_strength;
+            dot.velocity += repulsive_force + Pair::new(-0.02, 0.2);
+        }
+
+        for other_dot in &dots_copy {
+            if dot.position != other_dot.position {
+                let to_other = other_dot.position - dot.position;
+                let distance_to_other = to_other.magnitude().abs();
+                if distance_to_other < PARTICLE_REPULSIVE_RADIUS + ((12.0 * state.zoom) / 5.0) {
+                    let direction_to_other = to_other / distance_to_other.max(0.0001);
+                    let repulsive_force =
+                        -direction_to_other * repulsive_force_strength / distance_to_other;
+                    dot.velocity += repulsive_force;
+                }
+            }
+        }
+
         dot.position += dot.velocity * state.speed_scale;
 
         // Boundary conditions
-        let dampening_factor = 0.9;
-        let boundary_x = (800.0 / 2.0) - 60.0;
-        let boundary_y = (600.0 / 2.0) - 60.0;
+        let dampening_factor = 0.85;
+        let boundary_x = (800.0 / 2.0) - 40.0;
+        let boundary_y = (600.0 / 2.0) - 40.0;
 
         if dot.position.x >= boundary_x {
-            dot.position.x = boundary_x - 0.01; // Move slightly away
+            dot.position.x = boundary_x - 0.5; // Move slightly away
             dot.velocity.x = -dot.velocity.x * dampening_factor;
+            dot.velocity.y *= dampening_factor; // Reduce y velocity to avoid getting stuck in corners
         } else if dot.position.x <= -boundary_x {
-            dot.position.x = -boundary_x + 0.01;
+            dot.position.x = -boundary_x + 0.5;
             dot.velocity.x = -dot.velocity.x * dampening_factor;
+            dot.velocity.y *= dampening_factor; // Reduce y velocity to avoid getting stuck in corners
         }
 
         if dot.position.y >= boundary_y {
-            dot.position.y = boundary_y - 0.01;
+            dot.position.y = boundary_y - 0.5;
             dot.velocity.y = -dot.velocity.y * dampening_factor;
+            dot.velocity.x *= dampening_factor; // Reduce x velocity to avoid getting stuck in corners
         } else if dot.position.y <= -boundary_y {
-            dot.position.y = -boundary_y + 0.01;
+            dot.position.y = -boundary_y + 0.5;
             dot.velocity.y = -dot.velocity.y * dampening_factor;
+            dot.velocity.x *= dampening_factor; // Reduce x velocity to avoid getting stuck in corners
         }
     }
 }
