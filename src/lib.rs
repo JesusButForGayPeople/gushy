@@ -1,8 +1,12 @@
+use crate::font::CachedGlyph;
+use fontdue::Font;
 use rand::Rng;
+use std::collections::HashMap;
 use std::time::Instant;
 use tiny_skia::Color;
 
 pub mod debug;
+pub mod font;
 pub mod math;
 pub mod render;
 use crate::math::Pair;
@@ -35,7 +39,7 @@ impl WindowSize {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Dot {
     pub position: Pair,
     pub velocity: Pair,
@@ -43,6 +47,7 @@ pub struct Dot {
     pub color: Color,
     pub distance_to_cursor: f32,
     pub is_selected: bool,
+    pub label: String,
 }
 
 impl Dot {
@@ -54,12 +59,13 @@ impl Dot {
             color,
             distance_to_cursor: 0.0,
             is_selected: false,
+            label: String::from("A File Eventually..."),
         }
     }
     pub fn position(&self) -> Pair {
         self.position
     }
-    pub fn velocity(self) -> Pair {
+    pub fn velocity(&self) -> Pair {
         self.velocity
     }
 }
@@ -75,11 +81,15 @@ pub struct State {
     pub speed_scale: f32,
     pub force_scale: f32,
     pub focus_color: Option<Color>,
+    pub font: Font,
+    pub glyph_cache: HashMap<char, CachedGlyph>,
 }
 
 impl State {
     pub fn new(ndots: usize, window_width: u32, window_height: u32) -> State {
         let dots = generate_dots(ndots, window_width as f32, window_height as f32, 150.0);
+        let font_data = include_bytes!("../fonts/LTInternet-Regular.ttf") as &[u8];
+        let font = Font::from_bytes(font_data, fontdue::FontSettings::default()).unwrap();
         State {
             dots,
             zoom: 40.0,
@@ -102,6 +112,8 @@ impl State {
             speed_scale: 1.0 / ndots as f32,
             force_scale: 1.0 / ndots as f32,
             focus_color: None,
+            font,
+            glyph_cache: HashMap::new(),
         }
     }
 }

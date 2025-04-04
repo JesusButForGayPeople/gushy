@@ -9,3 +9,4 @@ pixels = "0.11.0"
 tiny-skia = "0.11.4"
 tokio = { version = "1.20.0", features = ["full"] }
 rand = "0.8.4"
+fontdue = "0.7"

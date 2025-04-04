@@ -165,7 +165,7 @@ fn main() {
                     state.window_size =
                         WindowSize::new(window.inner_size().width, window.inner_size().height);
                     draw_background(&mut pixmap, &state);
-                    draw_dots(&mut pixmap, &state);
+                    draw_dots(&mut pixmap, &mut state);
 
                     let frame = pixels.get_frame_mut();
 

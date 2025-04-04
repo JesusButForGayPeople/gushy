@@ -1,7 +1,9 @@
+use std::fmt;
+
 use crate::State;
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Rect, Stroke, Transform};
 
-pub fn draw_dots(pixmap: &mut Pixmap, state: &State) {
+pub fn draw_dots(pixmap: &mut Pixmap, state: &mut State) {
     let zoom = state.zoom.max(0.1);
     let mut paint = Paint::default();
     let min_mouse_distance = state
@@ -45,6 +47,55 @@ pub fn draw_dots(pixmap: &mut Pixmap, state: &State) {
             println!(
                 "Failed to create path! \ncenter: x={:?}+{:?},     y={:?}+{:?} \nradius: {:?}",
                 dot.position.x, x_offset, dot.position.y, y_offset, radius
+            );
+        }
+        crate::font::draw_text(
+            pixmap,
+            &mut state.glyph_cache,
+            &state.font,
+            &dot.label,
+            (dot.position.x + x_offset).into(),
+            (dot.position.y + y_offset + radius + 10.0).into(),
+            (14.0).into(),
+            crate::font::TextAlign::Center,
+        );
+        if let Some(focus_color) = state.focus_color {
+            let r = focus_color.red() * 255 as f32;
+            let g = focus_color.green() * 255 as f32;
+            let b = focus_color.blue() * 255 as f32;
+            let red = format!("Red: {:?}", r);
+            let green = format!("Green: {:?}", g);
+            let blue = format!("Blue: {:?}", b);
+
+            crate::font::draw_text(
+                pixmap,
+                &mut state.glyph_cache,
+                &state.font,
+                &red,
+                (x_offset).into(),
+                (y_offset - 40.0).into(),
+                (20.0).into(),
+                crate::font::TextAlign::Center,
+            );
+            crate::font::draw_text(
+                pixmap,
+                &mut state.glyph_cache,
+                &state.font,
+                &green,
+                (x_offset).into(),
+                (y_offset).into(),
+                (20.0).into(),
+                crate::font::TextAlign::Center,
+            );
+            crate::font::draw_text(
+                pixmap,
+                &mut state.glyph_cache,
+                &state.font,
+                &blue,
+                (x_offset).into(),
+                (y_offset + 40.0).into(),
+                (20.0).into(),
+                crate::font::TextAlign::Center,
             );
         }
     }
